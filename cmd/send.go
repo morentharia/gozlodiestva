@@ -218,12 +218,10 @@ to quickly create a Cobra application.`,
 					select {
 					case dat := <-jobs:
 						var res string
-						// fmt.Println("worker", id, "processing job", dat)
-						// time.Sleep(time.Second)
-
 						res, err := SendRawRequest(dat)
 						if err != nil {
-							log.Printf("err = %+v\n", err)
+							// log.Printf("err = %+v\n", err)
+							log.WithError(err).Error("SendRawRequest")
 							res = fmt.Sprintf("%s", err)
 						}
 						select {
@@ -244,13 +242,8 @@ to quickly create a Cobra application.`,
 				log.WithError(err).Error("ReadFile")
 				os.Exit(1)
 			}
-			if len(dat) == 0 {
-				log.Errorf("empty file %s", args[i])
-				os.Exit(1)
-			}
 			jobs <- string(dat)
 		}
-		// close(jobs)
 
 		for i := 0; i < len(args); i++ {
 			log.Printf("result = %#v\n", <-results)

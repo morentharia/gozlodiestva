@@ -43,8 +43,8 @@ const (
 	CRLF           = "\r\n"
 	ProxyAddr      = "localhost:8080"
 	DefaultPort    = 443
-	DealTimeout    = time.Second * 10
-	RWTimeout      = time.Second * 30
+	DealTimeout    = time.Second * 3
+	RWTimeout      = time.Second * 3
 	WorkerPoolSize = 30
 	//TODO;
 	// UpdateContentLength = true
@@ -60,10 +60,12 @@ func dialProxy(addr string) (net.Conn, error) {
 		fmt.Sprintf("CONNECT %s HTTP/1.1\n\r", addr),
 		CRLF + CRLF,
 	} {
-		// fmt.Printf("> %q\n", v)
+		fmt.Printf("> %q\n", v)
+		conn.SetDeadline(time.Now().Add(RWTimeout))
 		fmt.Fprint(conn, v)
 	}
 
+	conn.SetDeadline(time.Now().Add(RWTimeout))
 	r := bufio.NewReader(conn)
 	s, err := r.ReadString('\n')
 	if err != nil {
@@ -240,9 +242,12 @@ to quickly create a Cobra application.`,
 			jobs <- string(dat)
 		}
 
-		for i := 0; i < len(args); i++ {
-			log.Printf("result = %#v\n", <-results)
-		}
+		go func() {
+			for i := 0; i < len(args); i++ {
+				log.Printf("result = %#v\n", <-results)
+			}
+		}()
+
 	},
 }
 

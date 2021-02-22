@@ -83,11 +83,11 @@ func dialProxy(addr string) (net.Conn, error) {
 func ParseRawHTTPRequest(content string) (string, string, error) {
 	var host string
 	var res strings.Builder
+	log.WithField("content", content).Info("")
 	if content == "" {
 		return "", "", errors.WithStack(errors.New("content == ''"))
 	}
 
-	log.WithField("content", content).Info("WTf")
 	r := bufio.NewReader(strings.NewReader(content))
 	st, err := r.ReadString('\n')
 	if err != nil && err != io.EOF {
@@ -220,10 +220,11 @@ to quickly create a Cobra application.`,
 						var res string
 						// fmt.Println("worker", id, "processing job", dat)
 						// time.Sleep(time.Second)
+
 						res, err := SendRawRequest(dat)
 						if err != nil {
 							log.Printf("err = %+v\n", err)
-							// log.WithError(err).Error("fuck")
+							res = fmt.Sprintf("%s", err)
 						}
 						select {
 						case results <- res:
@@ -243,10 +244,13 @@ to quickly create a Cobra application.`,
 				log.WithError(err).Error("ReadFile")
 				os.Exit(1)
 			}
-			fmt.Print(string(dat))
+			if len(dat) == 0 {
+				log.Errorf("empty file %s", args[i])
+				os.Exit(1)
+			}
 			jobs <- string(dat)
 		}
-		close(jobs)
+		// close(jobs)
 
 		for i := 0; i < len(args); i++ {
 			log.Printf("result = %#v\n", <-results)

@@ -203,8 +203,8 @@ to quickly create a Cobra application.`,
 		wg := &sync.WaitGroup{}
 		defer wg.Wait()
 		defer cancel()
-		jobs := make(chan string, WorkerPoolSize)
-		results := make(chan string, WorkerPoolSize)
+		jobs := make(chan string, 2*WorkerPoolSize)
+		results := make(chan string, 2*WorkerPoolSize)
 
 		wg.Add(WorkerPoolSize)
 		for id := 0; id < WorkerPoolSize; id++ {
@@ -241,6 +241,7 @@ to quickly create a Cobra application.`,
 			fmt.Print(string(dat))
 			jobs <- string(dat)
 		}
+		close(jobs)
 
 		for i := 0; i < len(args); i++ {
 			log.Printf("result = %#v\n", <-results)

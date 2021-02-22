@@ -18,9 +18,6 @@ package cmd
 //TODO: make it work without burp
 
 import (
-	// "fmt"
-	// "log"
-
 	"context"
 	"os"
 	"sync"
@@ -43,15 +40,14 @@ import (
 )
 
 const (
-	SemaphoreSize = 20
-	CRLF          = "\r\n"
-	ProxyAddr     = "localhost:8080"
-	DefaultPort   = 443
+	CRLF           = "\r\n"
+	ProxyAddr      = "localhost:8080"
+	DefaultPort    = 443
+	DealTimeout    = time.Second * 10
+	RWTimeout      = time.Second * 30
+	WorkerPoolSize = 30
 	//TODO;
-	UpdateContentLength = true
-	DealTimeout         = time.Second * 10
-	RWTimeout           = time.Second * 5
-	WorkerPoolSize      = 50
+	// UpdateContentLength = true
 )
 
 func dialProxy(addr string) (net.Conn, error) {
@@ -83,8 +79,7 @@ func dialProxy(addr string) (net.Conn, error) {
 func ParseRawHTTPRequest(content string) (string, string, error) {
 	var host string
 	var res strings.Builder
-	log.WithField("content", content).Info("")
-	if content == "" {
+	if len(content) == 0 {
 		return "", "", errors.WithStack(errors.New("content == ''"))
 	}
 

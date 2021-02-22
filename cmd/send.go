@@ -51,7 +51,7 @@ const (
 	UpdateContentLength = true
 	DealTimeout         = time.Second * 10
 	RWTimeout           = time.Second * 5
-	WorkerPoolSize      = 30
+	WorkerPoolSize      = 50
 )
 
 func dialProxy(addr string) (net.Conn, error) {

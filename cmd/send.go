@@ -79,6 +79,7 @@ func dialProxy(addr string) (net.Conn, error) {
 }
 
 func ParseRawHTTPRequest(content string) (string, string, error) {
+	// TODO: add no gzip header
 	var host string
 	var res strings.Builder
 	if len(content) == 0 {
@@ -158,7 +159,7 @@ func recvHttpResp(conn io.Reader) (string, error) {
 	return res.String(), nil
 }
 
-//TODO: впилии писывай файло в __resp.http в той же папке
+//TODO: вписывай файло в __resp.http в той же папке
 func SendRawRequest(content string) (string, error) {
 	hostname, content, err := ParseRawHTTPRequest(content)
 	if err != nil {

@@ -18,6 +18,7 @@ package cmd
 //TODO: make it work without burp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -281,7 +282,7 @@ to quickly create a Cobra application.`,
 				respfilename := filepath.Join(dir, strings.Replace(file, "__req.http", "_resp.http", 1))
 
 				tmp := strings.SplitN(dat.content, CRLF+CRLF, 2)
-				_, body := tmp[0], tmp[1]
+				headers, body := tmp[0], tmp[1]
 
 				if json.Valid([]byte(body)) {
 					var ifce interface{}
@@ -295,8 +296,22 @@ to quickly create a Cobra application.`,
 					}
 					body = string(output)
 				}
+				if strings.Contains(headers, "application/javascript") {
+					fmt.Println("hahahahahaahah")
+					// fmt.Printf("$ %s\n", cmd)
+					cmd := exec.Command("js-beautify", "-i")
 
-				err := ioutil.WriteFile(respfilename, []byte(dat.content), 0644)
+					buffer := bytes.Buffer{}
+					buffer.WriteString(body)
+					cmd.Stdin = &buffer
+
+					output, err := cmd.Output()
+					if err == nil {
+						body = string(output)
+					}
+				}
+
+				err := ioutil.WriteFile(respfilename, []byte(headers+CRLF+CRLF+body), 0644)
 				if err != nil {
 					log.Fatal(err)
 				}

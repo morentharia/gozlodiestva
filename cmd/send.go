@@ -19,7 +19,10 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -109,6 +112,10 @@ func ParseRawHTTPRequest(content string) (string, string, error) {
 			continue
 		}
 
+		if strings.ToLower(p[0]) == "accept-encoding" {
+			continue
+		}
+
 		if strings.ToLower(p[0]) == "host" {
 			host = strings.TrimSpace(p[1])
 		}
@@ -166,19 +173,22 @@ func SendRawRequest(content string) (string, error) {
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
-	// TODO: может впилить какой нибудь аля pool коннектов к прокси
-	// conn, err := dialProxy(fmt.Sprintf("%s:%d", hostname, DefaultPort))
-	// if err != nil {
-	// 	return "", errors.WithStack(err)
-	// }
-	// defer conn.Close()
 
-	d := net.Dialer{Timeout: DealTimeout}
-	conn, err := d.Dial("tcp", hostname+":443")
-	if err != nil {
-		return "", errors.WithStack(err)
+	var conn net.Conn
+	if viper.GetBool("use-burp") {
+		conn, err = dialProxy(fmt.Sprintf("%s:%d", hostname, DefaultPort))
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		defer conn.Close()
+	} else {
+		d := net.Dialer{Timeout: DealTimeout}
+		conn, err = d.Dial("tcp", hostname+":443")
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		defer conn.Close()
 	}
-	defer conn.Close()
 
 	roots, err := x509.SystemCertPool()
 	if err != nil {
@@ -201,6 +211,21 @@ func SendRawRequest(content string) (string, error) {
 	return rawresp, nil
 }
 
+func command(cmd string) (string, error) {
+	fmt.Printf("$ %s\n", cmd)
+	out, err := exec.Command("bash", "-c", cmd).Output()
+	if err != nil {
+		return "", errors.WithMessagef(err, "command('%s')", cmd)
+	}
+	log.Printf("%s", string(out))
+	return string(out), nil
+}
+
+type JobParams struct {
+	id      int
+	content string
+}
+
 // sendCmd represents the send command
 var sendCmd = &cobra.Command{
 	Use:   "send",
@@ -212,14 +237,12 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		viper.Bool("use-burp")
-		return
 		ctx, cancel := context.WithCancel(context.Background())
 		wg := &sync.WaitGroup{}
 		defer wg.Wait()
 		// defer cancel()
-		jobs := make(chan string, 100)
-		results := make(chan string, 100)
+		jobs := make(chan *JobParams, 100)
+		results := make(chan *JobParams, 100)
 
 		wg.Add(WorkerPoolSize)
 		for id := 0; id < WorkerPoolSize; id++ {
@@ -230,14 +253,14 @@ to quickly create a Cobra application.`,
 					case dat := <-jobs:
 						var res string
 						// log.Info(dat[:80])
-						res, err := SendRawRequest(dat)
+						res, err := SendRawRequest(dat.content)
 						if err != nil {
 							log.Printf("err = %+v\n", err)
 							log.WithError(err).Error("SendRawRequest")
 							res = fmt.Sprintf("ERROR: %s", err)
 						}
 						select {
-						case results <- res:
+						case results <- &JobParams{dat.id, res}:
 						case <-ctx.Done():
 							return
 						}
@@ -249,11 +272,34 @@ to quickly create a Cobra application.`,
 		}
 
 		go func(args []string) {
-			// for {
-			// 	log.Printf("result = %#v\n", (<-results)[:60])
-			// }
 			for i := 0; i < len(args); i++ {
-				log.Printf("result(%d) = %#v\n", i, (<-results)[:20])
+				dat := <-results
+				log.Printf("%s result(%d) = %#v\n", args[dat.id], dat.id, dat.content[:20])
+				path := args[dat.id]
+				dir, file := filepath.Split(path)
+				// log.Printf("filepath.Join(dir, ) = %#v\n", filepath.Join(dir, strings.Replace(file, "__req.http", "_resp.http", 1)))
+				respfilename := filepath.Join(dir, strings.Replace(file, "__req.http", "_resp.http", 1))
+
+				tmp := strings.SplitN(dat.content, CRLF+CRLF, 2)
+				_, body := tmp[0], tmp[1]
+
+				if json.Valid([]byte(body)) {
+					var ifce interface{}
+					err := json.Unmarshal([]byte(body), &ifce)
+					if err != nil {
+						log.WithError(err).Error("json.Unmarshal")
+					}
+					output, err := json.MarshalIndent(ifce, "", "  ")
+					if err != nil {
+						log.WithError(err).Error("json.Marshal")
+					}
+					body = string(output)
+				}
+
+				err := ioutil.WriteFile(respfilename, []byte(dat.content), 0644)
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 			cancel()
 		}(args)
@@ -266,7 +312,7 @@ to quickly create a Cobra application.`,
 				log.WithError(err).Error("ReadFile")
 				os.Exit(1)
 			}
-			jobs <- string(dat)
+			jobs <- &JobParams{i, string(dat)}
 			log.Printf("i = %#v filename = %#v\n", i, args[i])
 		}
 	},

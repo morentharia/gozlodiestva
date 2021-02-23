@@ -212,6 +212,8 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		viper.Bool("use-burp")
+		return
 		ctx, cancel := context.WithCancel(context.Background())
 		wg := &sync.WaitGroup{}
 		defer wg.Wait()
@@ -281,6 +283,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	sendCmd.Flags().BoolP("use-burp", "-b", true, "Use burp")
+	sendCmd.Flags().BoolP("use-burp", "b", true, "Use burp")
 	viper.BindPFlag("use-burp", sendCmd.Flags().Lookup("use-burp"))
 }

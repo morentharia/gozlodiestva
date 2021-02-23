@@ -43,9 +43,9 @@ const (
 	CRLF           = "\r\n"
 	ProxyAddr      = "localhost:8080"
 	DefaultPort    = 443
-	DealTimeout    = time.Second * 3
-	RWTimeout      = time.Second * 3
-	WorkerPoolSize = 30
+	DealTimeout    = time.Second * 60
+	RWTimeout      = time.Second * 30
+	WorkerPoolSize = 1
 	//TODO;
 	// UpdateContentLength = true
 )
@@ -68,7 +68,7 @@ func dialProxy(addr string) (net.Conn, error) {
 	conn.SetDeadline(time.Now().Add(RWTimeout))
 	r := bufio.NewReader(conn)
 	s, err := r.ReadString('\n')
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return nil, errors.WithStack(err)
 	}
 	// fmt.Printf("< %q\n", s)
@@ -163,6 +163,7 @@ func SendRawRequest(content string) (string, error) {
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
+	// TODO: может впилить какой нибудь аля pool коннектов к прокси
 	conn, err := dialProxy(fmt.Sprintf("%s:%d", hostname, DefaultPort))
 	if err != nil {
 		return "", errors.WithStack(err)
@@ -175,6 +176,7 @@ func SendRawRequest(content string) (string, error) {
 	}
 	conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: true}
 	connTLS := tls.Client(conn, conf)
+	defer connTLS.Close()
 
 	connTLS.SetDeadline(time.Now().Add(RWTimeout))
 	_, err = io.WriteString(connTLS, string(content))
@@ -204,8 +206,8 @@ to quickly create a Cobra application.`,
 		wg := &sync.WaitGroup{}
 		defer wg.Wait()
 		defer cancel()
-		jobs := make(chan string, 2*WorkerPoolSize)
-		results := make(chan string, 2*WorkerPoolSize)
+		jobs := make(chan string, 20*WorkerPoolSize)
+		results := make(chan string, 20*WorkerPoolSize)
 
 		wg.Add(WorkerPoolSize)
 		for id := 0; id < WorkerPoolSize; id++ {
@@ -215,9 +217,10 @@ to quickly create a Cobra application.`,
 					select {
 					case dat := <-jobs:
 						var res string
+						log.Info(dat[:80])
 						res, err := SendRawRequest(dat)
 						if err != nil {
-							// log.Printf("err = %+v\n", err)
+							log.Printf("err = %+v\n", err)
 							log.WithError(err).Error("SendRawRequest")
 							res = fmt.Sprintf("%s", err)
 						}
@@ -243,9 +246,12 @@ to quickly create a Cobra application.`,
 		}
 
 		go func() {
-			for i := 0; i < len(args); i++ {
+			for {
 				log.Printf("result = %#v\n", <-results)
 			}
+			// for i := 0; i < len(args); i++ {
+			// 	log.Printf("result = %#v\n", <-results)
+			// }
 		}()
 
 	},

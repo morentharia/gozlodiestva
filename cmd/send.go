@@ -297,14 +297,10 @@ to quickly create a Cobra application.`,
 					body = string(output)
 				}
 				if strings.Contains(headers, "application/javascript") {
-					fmt.Println("hahahahahaahah")
-					// fmt.Printf("$ %s\n", cmd)
 					cmd := exec.Command("js-beautify", "-i")
-
 					buffer := bytes.Buffer{}
 					buffer.WriteString(body)
 					cmd.Stdin = &buffer
-
 					output, err := cmd.Output()
 					if err == nil {
 						body = string(output)

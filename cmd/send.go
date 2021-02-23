@@ -282,5 +282,5 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	sendCmd.Flags().BoolP("use-burp", "-b", true, "Use burp")
-	viper.BindPFlags("use-burp", sendCmd.Flags().Lookup("use-burp"))
+	viper.BindPFlag("use-burp", sendCmd.Flags().Lookup("use-burp"))
 }

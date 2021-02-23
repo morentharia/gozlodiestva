@@ -170,23 +170,25 @@ func SendRawRequest(content string) (string, error) {
 	}
 	defer conn.Close()
 
-	roots, err := x509.SystemCertPool()
-	if err != nil {
-		return "", errors.WithStack(err)
-	}
-	conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: true}
-	connTLS := tls.Client(conn, conf)
-	defer connTLS.Close()
+	for i := 0; i < 3; i++ {
+		roots, err := x509.SystemCertPool()
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: true}
+		connTLS := tls.Client(conn, conf)
+		defer connTLS.Close()
 
-	connTLS.SetDeadline(time.Now().Add(RWTimeout))
-	_, err = io.WriteString(connTLS, string(content))
-	if err != nil {
-		return "", errors.WithStack(err)
-	}
-	connTLS.SetDeadline(time.Now().Add(RWTimeout))
-	rawresp, err := recvHttpResp(connTLS)
-	if err != nil {
-		return "", errors.WithStack(err)
+		connTLS.SetDeadline(time.Now().Add(RWTimeout))
+		_, err = io.WriteString(connTLS, string(content))
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		connTLS.SetDeadline(time.Now().Add(RWTimeout))
+		rawresp, err := recvHttpResp(connTLS)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
 	}
 	return rawresp, nil
 }

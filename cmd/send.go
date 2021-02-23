@@ -43,9 +43,9 @@ const (
 	CRLF           = "\r\n"
 	ProxyAddr      = "localhost:8080"
 	DefaultPort    = 443
-	DealTimeout    = time.Second * 60
-	RWTimeout      = time.Second * 30
-	WorkerPoolSize = 1
+	DealTimeout    = time.Second * 120
+	RWTimeout      = time.Second * 60
+	WorkerPoolSize = 200
 	//TODO;
 	// UpdateContentLength = true
 )
@@ -60,7 +60,7 @@ func dialProxy(addr string) (net.Conn, error) {
 		fmt.Sprintf("CONNECT %s HTTP/1.1\n\r", addr),
 		CRLF + CRLF,
 	} {
-		fmt.Printf("> %q\n", v)
+		// fmt.Printf("> %q\n", v)
 		conn.SetDeadline(time.Now().Add(RWTimeout))
 		fmt.Fprint(conn, v)
 	}
@@ -158,37 +158,43 @@ func recvHttpResp(conn io.Reader) (string, error) {
 	return res.String(), nil
 }
 
+//TODO: впилии писывай файло в __resp.http в той же папке
 func SendRawRequest(content string) (string, error) {
 	hostname, content, err := ParseRawHTTPRequest(content)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 	// TODO: может впилить какой нибудь аля pool коннектов к прокси
-	conn, err := dialProxy(fmt.Sprintf("%s:%d", hostname, DefaultPort))
+	// conn, err := dialProxy(fmt.Sprintf("%s:%d", hostname, DefaultPort))
+	// if err != nil {
+	// 	return "", errors.WithStack(err)
+	// }
+	// defer conn.Close()
+
+	d := net.Dialer{Timeout: DealTimeout}
+	conn, err := d.Dial("tcp", hostname+":443")
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 	defer conn.Close()
 
-	for i := 0; i < 3; i++ {
-		roots, err := x509.SystemCertPool()
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
-		conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: true}
-		connTLS := tls.Client(conn, conf)
-		defer connTLS.Close()
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	conf := &tls.Config{RootCAs: roots, InsecureSkipVerify: true}
+	connTLS := tls.Client(conn, conf)
+	defer connTLS.Close()
 
-		connTLS.SetDeadline(time.Now().Add(RWTimeout))
-		_, err = io.WriteString(connTLS, string(content))
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
-		connTLS.SetDeadline(time.Now().Add(RWTimeout))
-		rawresp, err := recvHttpResp(connTLS)
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
+	connTLS.SetDeadline(time.Now().Add(RWTimeout))
+	_, err = io.WriteString(connTLS, string(content))
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	connTLS.SetDeadline(time.Now().Add(RWTimeout))
+	rawresp, err := recvHttpResp(connTLS)
+	if err != nil {
+		return "", errors.WithStack(err)
 	}
 	return rawresp, nil
 }
@@ -207,9 +213,9 @@ to quickly create a Cobra application.`,
 		ctx, cancel := context.WithCancel(context.Background())
 		wg := &sync.WaitGroup{}
 		defer wg.Wait()
-		defer cancel()
-		jobs := make(chan string, 20*WorkerPoolSize)
-		results := make(chan string, 20*WorkerPoolSize)
+		// defer cancel()
+		jobs := make(chan string, 100)
+		results := make(chan string, 100)
 
 		wg.Add(WorkerPoolSize)
 		for id := 0; id < WorkerPoolSize; id++ {
@@ -219,12 +225,12 @@ to quickly create a Cobra application.`,
 					select {
 					case dat := <-jobs:
 						var res string
-						log.Info(dat[:80])
+						// log.Info(dat[:80])
 						res, err := SendRawRequest(dat)
 						if err != nil {
 							log.Printf("err = %+v\n", err)
 							log.WithError(err).Error("SendRawRequest")
-							res = fmt.Sprintf("%s", err)
+							res = fmt.Sprintf("ERROR: %s", err)
 						}
 						select {
 						case results <- res:
@@ -238,6 +244,18 @@ to quickly create a Cobra application.`,
 			}(id)
 		}
 
+		go func(args []string) {
+			// for {
+			// 	log.Printf("result = %#v\n", (<-results)[:60])
+			// }
+			for i := 0; i < len(args); i++ {
+				log.Printf("result(%d) = %#v\n", i, (<-results)[:20])
+			}
+			cancel()
+		}(args)
+
+		log.Printf("len(args) = %#v\n", len(args))
+
 		for i := 0; i < len(args); i++ {
 			dat, err := ioutil.ReadFile(args[i])
 			if err != nil {
@@ -245,17 +263,8 @@ to quickly create a Cobra application.`,
 				os.Exit(1)
 			}
 			jobs <- string(dat)
+			log.Printf("i = %#v filename = %#v\n", i, args[i])
 		}
-
-		go func() {
-			for {
-				log.Printf("result = %#v\n", <-results)
-			}
-			// for i := 0; i < len(args); i++ {
-			// 	log.Printf("result = %#v\n", <-results)
-			// }
-		}()
-
 	},
 }
 

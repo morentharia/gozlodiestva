@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"bufio"
 	"crypto/tls"
@@ -280,5 +281,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// sendCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	sendCmd.Flags().BoolP("use-burp", "-b", true, "Use burp")
+	viper.BindPFlags("use-burp", sendCmd.Flags().Lookup("use-burp"))
 }

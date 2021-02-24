@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.com/morentharia/httpsendraw/cmd"
+import "github.com/morentharia/gozlodiestva/cmd"
 
 func main() {
 	cmd.Execute()

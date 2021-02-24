@@ -306,6 +306,7 @@ to quickly create a Cobra application.`,
 						body = string(output)
 					}
 				}
+				//TODO add html beautify
 
 				err := ioutil.WriteFile(respfilename, []byte(headers+CRLF+CRLF+body), 0644)
 				if err != nil {
